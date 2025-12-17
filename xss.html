@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Proof of Control — LinkedIn redirect XSS (benign)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .banner {
+      position:fixed; inset:0 0 auto 0; padding:14px 18px;
+      background: #ffd400; color:#111; border-bottom:4px solid #111;
+      z-index: 2147483647; /* top of stack */
+      display:flex; align-items:center; gap:10px;
+    }
+    .badge { font-weight:700; padding:4px 8px; background:#111; color:#ffd400; border-radius:4px; }
+    .wrap { padding:20px; max-width:800px; margin:80px auto 40px; }
+    .card { border:1px solid #ccc; border-radius:8px; padding:16px; background:#fff; color:#111; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.95em; }
+    .ok { color: #0a7f00; }
+    .warn { color: #b00020; }
+    .muted { opacity: 0.75; }
+    .chip { display:inline-block; padding:2px 6px; border:1px solid #999; border-radius:999px; margin-right:6px; font-size:0.85em; }
+    .footer { margin-top:18px; font-size:0.9em; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <span class="badge">PoC</span>
+    <div><strong>Proof of Control:</strong> this page was loaded via LinkedIn redirect and executed arbitrary JavaScript (benign).</div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>Runtime signals</h2>
+      <ul>
+        <li><strong class="ok">DOM takeover:</strong> injected banner, styles, and content rendered under LinkedIn’s trusted redirect.</li>
+        <li><strong>Origin context:</strong> <code class="mono" id="ctx-origin"></code></li>
+        <li><strong>Referrer:</strong> <code class="mono" id="ctx-ref"></code> <span class="muted">(shows LinkedIn path if available)</span></li>
+        <li><strong>Execution timestamp:</strong> <code class="mono" id="ctx-ts"></code></li>
+        <li><strong>Query/fragment echo:</strong> <code class="mono" id="ctx-qf"></code></li>
+      </ul>
+
+      <h3>Parent–child messaging channel</h3>
+      <p class="muted">This page can communicate with its opener/parent via <code>postMessage</code>. We send a benign marker to prove script control without accessing data.</p>
+      <pre class="mono" id="msg-log">[waiting to send benign message...]</pre>
+      <button id="send-msg">Send benign control marker</button>
+
+      <h3>Environment chips</h3>
+      <div id="chips"></div>
+
+      <div class="footer muted">All actions are non-invasive and purely demonstrative. No data is collected or transmitted.</div>
+    </div>
+  </div>
+
+  <script>
+    // Benign control markers
+    const ts = new Date().toISOString();
+    const ref = document.referrer || '(none)';
+    const qf = location.search + location.hash;
+    const originGuess = location.origin;
+
+    // Render context
+    document.getElementById('ctx-origin').textContent = originGuess;
+    document.getElementById('ctx-ref').textContent = ref;
+    document.getElementById('ctx-ts').textContent = ts;
+    document.getElementById('ctx-qf').textContent = qf || '(empty)';
+
+    // Visual proof: style injection + DOM modifications already performed above
+    const chipsEl = document.getElementById('chips');
+    const chips = [
+      ['LinkedIn redirect', /linkedin\.com/.test(ref) ? 'detected' : 'not detected'],
+      ['Top-level context', window.top === window ? 'yes' : 'no (framed)'],
+      ['Script capability', 'active (banner + telemetry rendered)'],
+      ['CSP interference', 'not evaluated (benign PoC)'],
+    ];
+    chips.forEach(([k,v]) => {
+      const d=document.createElement('span');
+      d.className='chip';
+      d.textContent=`${k}: ${v}`;
+      chipsEl.appendChild(d);
+    });
+
+    // Parent–child messaging (benign)
+    const msgLog = document.getElementById('msg-log');
+    document.getElementById('send-msg').addEventListener('click', () => {
+      const marker = { type: 'POC_CONTROL', benign: true, ts, href: location.href };
+      try {
+        window.opener?.postMessage(marker, '*');
+        window.parent?.postMessage(marker, '*');
+        msgLog.textContent = `[sent] postMessage benign marker: ${JSON.stringify(marker)}`;
+      } catch (e) {
+        msgLog.textContent = `[error] unable to send benign marker: ${String(e)}`;
+      }
+    });
+
+    // Console markers for reviewers
+    console.log('[PoC] Arbitrary JS executed via LinkedIn redirect (benign).');
+    console.log('[PoC] Context:', { ts, referrer: ref, href: location.href });
+
+    // Visible defacement (benign, reversible): append a styled note to prove DOM write capability
+    const note = document.createElement('div');
+    note.style = 'position:fixed; right:12px; bottom:12px; background:#111; color:#ffd400; padding:10px 12px; border-radius:8px; z-index:2147483647;';
+    note.textContent = 'Benign PoC: control confirmed';
+    document.body.appendChild(note);
+
+    // IMPORTANT: This PoC does NOT access cookies, tokens, or sensitive data.
+    // It demonstrates control ethically. No network exfiltration is performed.
+  </script>
+</body>
+</html>
